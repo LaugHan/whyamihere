@@ -1,0 +1,252 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #f5f5f5;
+  color: #1a1a2e;
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 24px 20px 60px;
+}
+
+/* Header */
+.header {
+  text-align: center;
+  padding: 24px 0 20px;
+}
+
+.header h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1a1a2e;
+  margin-bottom: 4px;
+}
+
+.header .subtitle {
+  font-size: 14px;
+  color: #999;
+  font-weight: 400;
+}
+
+.header-desc {
+  font-size: 13px;
+  color: #999;
+  margin-top: 6px;
+}
+
+/* Toolbar */
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 10px 16px;
+  background: #fff;
+  border-radius: 10px;
+}
+
+.filter-select {
+  padding: 6px 10px;
+  border: 1.5px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  background: #fff;
+  cursor: pointer;
+}
+
+.entry-count {
+  font-size: 12px;
+  color: #999;
+}
+
+/* History list */
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.history-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px 20px;
+  position: relative;
+  transition: box-shadow 0.2s;
+}
+
+.history-card:hover {
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
+
+.history-card .card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.history-card .domain-tag {
+  display: inline-block;
+  background: #fff3e0;
+  color: #e65100;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+
+.history-card .card-time {
+  font-size: 12px;
+  color: #aaa;
+}
+
+.history-card .card-reason {
+  font-size: 14px;
+  line-height: 1.7;
+  color: #333;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.history-card .card-url {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #999;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.history-card .card-url a {
+  color: #1976d2;
+  text-decoration: none;
+}
+
+.history-card .card-url a:hover {
+  text-decoration: underline;
+}
+
+.history-card .card-snooze {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #bbb;
+}
+
+.history-card .card-actions {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+}
+
+.history-card .action-btn {
+  font-size: 11px;
+  padding: 4px 10px;
+  border: 1px solid #ddd;
+  background: #fff;
+  border-radius: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+.history-card .action-btn.cancel-snooze {
+  color: #e65100;
+  border-color: #ffcc80;
+}
+
+.history-card .action-btn.cancel-snooze:hover {
+  background: #fff3e0;
+  border-color: #ff9800;
+}
+
+.history-card .delete-btn {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: #ccc;
+  cursor: pointer;
+  font-size: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.history-card .delete-btn:hover {
+  background: #ff5252;
+  color: #fff;
+}
+
+/* Snooze banner */
+.snooze-banner {
+  margin-bottom: 12px;
+  padding: 10px 16px;
+  background: #fff3e0;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #e65100;
+  display: none;
+}
+
+.snooze-banner.has-snooze {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.snooze-banner .snooze-banner-text {
+  flex: 1;
+}
+
+.snooze-banner .cancel-banner-btn {
+  font-size: 12px;
+  padding: 5px 12px;
+  border: 1px solid #e65100;
+  background: #fff;
+  color: #e65100;
+  border-radius: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  margin-left: 12px;
+  white-space: nowrap;
+}
+
+.snooze-banner .cancel-banner-btn:hover {
+  background: #e65100;
+  color: #fff;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  display: none;
+}
+
+.empty-state p {
+  font-size: 16px;
+  color: #999;
+}
+
+.empty-state .hint {
+  font-size: 13px;
+  color: #bbb;
+  margin-top: 10px;
+  line-height: 1.6;
+}

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>浏览记录 - Why Am I Here?</title>
+  <link rel="stylesheet" href="history.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>Why Am I Here? <span class="subtitle">/ 我咋在这？</span></h1>
+      <p class="header-desc">每次被提醒时写下的"浏览目的"</p>
+    </header>
+
+    <div class="toolbar">
+      <select id="domainFilter" class="filter-select">
+        <option value="">全部域名</option>
+      </select>
+      <span id="entryCount" class="entry-count"></span>
+    </div>
+
+    <div id="snoozeBanner" class="snooze-banner"></div>
+
+    <div id="historyList" class="history-list"></div>
+    <div id="emptyState" class="empty-state">
+      <p>还没有任何记录</p>
+      <p class="hint">当你在监控域名上浏览超过一分钟，<br>插件会提醒你写下目的，记录就会出现在这里。</p>
+    </div>
+  </div>
+  <script src="history.js"></script>
+</body>
+</html>

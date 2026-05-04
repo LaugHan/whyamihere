@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Why Am I Here?</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <header class="header">
+      <h1>Why Am I Here?</h1>
+      <span class="subtitle">我咋在这？</span>
+    </header>
+
+    <!-- Monitored Domains -->
+    <section class="section">
+      <h2 class="section-title">监控域名</h2>
+      <p class="section-desc">在这些域名下停留达到设定延迟后会弹出提醒</p>
+      <ul id="domainList" class="domain-list"></ul>
+      <div class="add-domain">
+        <input type="text" id="newDomain" placeholder="输入域名，如: example.com">
+        <button id="addBtn" class="btn btn-add">添加</button>
+      </div>
+      <div id="addError" class="error-msg"></div>
+    </section>
+
+    <!-- Settings -->
+    <section class="section">
+      <h2 class="section-title">提醒设置</h2>
+      <p class="section-desc">黑客松演示可用 5 秒 / 10 字快速触发</p>
+      <div class="settings-grid">
+        <label>
+          <span>提醒延迟</span>
+          <input type="number" id="timerSeconds" min="3" max="3600" step="1">
+          <em>秒</em>
+        </label>
+        <label>
+          <span>最少字数</span>
+          <input type="number" id="minChars" min="1" max="300" step="1">
+          <em>字</em>
+        </label>
+      </div>
+      <div class="settings-actions">
+        <button id="saveSettingsBtn" class="btn btn-add">保存设置</button>
+        <button id="demoModeBtn" class="btn btn-secondary">演示模式</button>
+      </div>
+      <div id="settingsStatus" class="status-msg"></div>
+    </section>
+
+    <!-- Snooze Status -->
+    <section class="section">
+      <h2 class="section-title">当前免打扰状态</h2>
+      <div id="snoozeStatus" class="snooze-status"></div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <button id="historyBtn" class="btn btn-secondary">查看历史记录</button>
+    </footer>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

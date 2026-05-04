@@ -1,88 +1,195 @@
 # Why Am I Here? / 我咋在这？
 
-A Chrome extension that interrupts unconscious scrolling by asking one question:
+一个 Chrome 扩展：当你在知乎、小红书、B 站、微博等网站停留一段时间后，它会弹出一句简单的问题：
 
-> Why did I open this site?
+> 我为什么打开这个网站？
 
-After you stay on a monitored domain for a configurable period, the extension shows a small overlay. You must write your purpose before continuing, then choose how long to snooze the reminder. The goal is not to block websites completely. The goal is to restore intention at the moment attention starts drifting.
+你需要写下这次浏览的目的，才能继续。它不是用来封锁网站的，而是用来打断“我也不知道为什么就刷起来了”的自动行为。
 
-## Why This Exists
+## 这个项目想解决什么
 
-The project is based on a simple observation: many productivity systems fail because the user never takes the first step. For distracting websites, the first step is often just noticing that you are there.
+很多人不是不知道该学习、该写论文、该做项目，而是卡在更前面的一步：
 
-This extension creates that noticing moment:
+**明明想开始做正事，但身体已经自动打开了娱乐/信息流网站。**
 
-- Detects when you spend time on high-distraction domains.
-- Prompts you to write the reason you opened the site.
-- Saves a local history of those reasons.
-- Lets you snooze a domain after you have made the choice explicit.
+传统效率工具通常假设你已经准备好了：
 
-All data is stored locally through Chrome storage. There is no backend.
+- Todo App 假设你会主动打开任务列表。
+- 番茄钟假设你已经决定开始工作。
+- 网站 blocker 假设你愿意接受强制封锁。
 
-## Current Features
+但真实情况经常是：你已经在刷了，才突然意识到“我怎么又在这里？”
 
-- Default monitored sites: Zhihu, Xiaohongshu, Weibo, Bilibili, Douban, Tieba, Douyin.
-- Add or remove monitored domains from the popup.
-- Per-tab timer that only runs on the active tab.
-- Shadow DOM overlay to avoid page CSS conflicts.
-- Configurable timer and minimum-purpose text before submit.
-- Snooze presets and custom snooze duration.
-- Local history page with domain filtering and deletion.
-- Unit tests for core behavior plus syntax checks for extension scripts.
+这个扩展解决的就是这个瞬间。它不骂你，也不直接禁止访问，而是把无意识浏览变成一个明确选择：
 
-## Install Locally
+1. 你进入容易分心的网站。
+2. 停留达到设定时间后，扩展弹出提醒。
+3. 你写下“我为什么打开这里”。
+4. 如果确实有目的，就继续，并设置一段免打扰时间。
+5. 如果写不出来，这个弹窗已经帮你意识到：你可能不是有目的地来这里。
 
-1. Open Chrome and go to `chrome://extensions`.
-2. Enable `Developer mode`.
-3. Click `Load unpacked`.
-4. Select this folder:
+一句话：**它不是 blocker，而是 intention checkpoint（意图检查点）。**
+
+## 为什么我要做它
+
+这个项目来自一个观察：很多原本很自律、很 driven 的人，在本科之后、读 PhD 之后、独居之后，突然变得很难开始做事。
+
+一开始看起来像是“变懒了”，但更准确地说，是动力系统变了：
+
+- 高中和本科有考试、DDL、同学竞争、老师安排，这些都是外部动力。
+- 到了 PhD 或更自由的阶段，外部动力突然少了很多。
+- 内部动力又不是自动生成的，尤其是目标很长期、反馈很慢的时候。
+- 于是最难的不是“怎么高效学习”，而是“怎么迈出第一步”。
+
+所以我不想再做一个复杂的时间管理系统。因为如果第一步没有迈出去，任何时间管理技巧都没用。
+
+我想做一个很小的工具，只处理一个具体时刻：
+
+> 当你已经滑进信息流，却还没完全沉进去时，把你拉回来问一句：你为什么在这里？
+
+这就是 Why Am I Here? 的 motivation。
+
+## 它怎么工作
+
+默认监控这些网站：
+
+- `zhihu.com`
+- `xiaohongshu.com`
+- `weibo.com`
+- `bilibili.com`
+- `douban.com`
+- `tieba.baidu.com`
+- `douyin.com`
+
+你也可以在扩展弹窗里自己添加或删除域名。
+
+核心流程：
+
+1. 打开一个被监控的网站。
+2. 在该网站停留达到提醒延迟。
+3. 页面右上角出现提醒面板。
+4. 写下本次浏览目的，达到最少字数后才能提交。
+5. 选择 30 分钟、1 小时、2 小时等免打扰时间。
+6. 提交后，本次记录会保存在本地历史页里。
+
+所有数据都存在 Chrome 本地存储中。没有服务器，没有账号系统，也不会上传你的浏览目的。
+
+## 功能
+
+- 监控指定域名，在停留一段时间后弹出提醒。
+- 支持自定义监控域名。
+- 支持设置提醒延迟和最少字数。
+- 支持“演示模式”：5 秒触发、10 字即可提交，方便黑客松展示。
+- 支持选择免打扰时间，避免重复打断。
+- 自动保存本地历史记录。
+- 历史页支持按域名筛选和删除记录。
+- 使用 Shadow DOM 注入弹窗，尽量避免被网页样式影响。
+- 附带测试脚本，检查核心逻辑和扩展脚本语法。
+
+## 本地安装
+
+1. 打开 Chrome。
+2. 进入 `chrome://extensions`。
+3. 打开右上角 `Developer mode` / `开发者模式`。
+4. 点击 `Load unpacked` / `加载已解压的扩展程序`。
+5. 选择项目里的这个文件夹：
 
 ```text
 why-am-i-here
 ```
 
-## Test
+安装后，浏览器右上角会出现扩展图标。点击图标可以管理监控域名、提醒设置和历史记录。
 
-Run from the repository root:
+## 黑客松演示方法
+
+建议不要讲成“这是一个防沉迷插件”。更好的说法是：
+
+> 它不是禁止你打开网站，而是在你无意识打开网站时，要求你恢复意图。
+
+现场演示可以这样走：
+
+1. 打开扩展 popup。
+2. 点击 `演示模式`，把触发时间设成 5 秒、最少字数设成 10 字。
+3. 打开一个监控网站，比如知乎或 B 站。
+4. 等 5 秒，展示提醒弹窗。
+5. 先输入一个很短的答案，比如“随便看看”，展示按钮无法提交。
+6. 再输入一个真实目的，比如“我想查一个关于拖延和启动困难的帖子，看看有没有可以做成工具的 insight”。
+7. 选择免打扰时间并提交。
+8. 打开历史记录页，展示刚才写下的目的。
+
+演示重点不是“我能拦截网站”，而是这个闭环：
+
+**无意识进入网站 -> 被提醒 -> 写下目的 -> 继续或退出 -> 留下可反思的记录**
+
+## Demo Slides
+
+项目里有一份可直接打开的演示文稿：
+
+```text
+demo-slides.html
+```
+
+用浏览器打开即可。快捷键：
+
+- `→` 或空格：下一页
+- `←`：上一页
+- `N`：显示/隐藏每页讲稿提示
+- `1` 到 `8`：跳到对应页
+
+## 测试
+
+在项目根目录运行：
 
 ```bash
 node why-am-i-here/tests/run-tests.js
 ```
 
-The test runner validates both core logic and JavaScript syntax for the actual extension scripts.
+测试内容包括：
 
-## Hackathon Demo Flow
+- 域名匹配逻辑
+- URL 解析
+- 免打扰逻辑
+- 字数统计
+- 历史记录筛选
+- HTML 转义
+- Chrome API mock 流程
+- `background.js`、`content.js`、`popup.js`、`history.js` 的语法检查
 
-Use the demo as a short story, not a feature tour.
+当前测试结果应为：
 
-1. Start with the problem:
-   "I don't want another todo app. I want a tool for the exact moment I realize I opened Xiaohongshu or Bilibili without knowing why."
+```text
+76 passed, 0 failed
+```
 
-2. Show the normal failure:
-   Open a distracting site and say: "This is the moment where most productivity tools are absent."
+## 项目结构
 
-3. Trigger the extension:
-   Use a short test timer if needed, then show the overlay asking for the purpose.
+```text
+.
+├── README.md
+├── demo-slides.html
+├── motivation.txt
+└── why-am-i-here
+    ├── manifest.json
+    ├── background.js
+    ├── content.js
+    ├── popup.html
+    ├── popup.js
+    ├── popup.css
+    ├── history.html
+    ├── history.js
+    ├── history.css
+    ├── icons
+    └── tests
+```
 
-4. Make the interaction concrete:
-   Type a bad vague answer first, show that it is not enough, then type a real intention.
+## 之后可以继续做什么
 
-5. Show agency instead of blocking:
-   Pick a snooze duration and submit. Emphasize that the extension does not ban the site; it forces a conscious decision.
+- 改设置后立即重置当前标签页的计时器。
+- 在历史页增加每日统计：今天被提醒几次、最常出现的网站、最常出现的时间段。
+- 支持导出历史记录为 JSON / CSV。
+- 增加更轻量的模式，例如只要求一句话而不是固定字数。
+- 发布前收敛权限，或更清楚地解释为什么需要访问网页 URL。
 
-6. Show reflection:
-   Open the history page and show the accumulated reasons by domain.
+## 一句话总结
 
-7. Close with the product thesis:
-   "The product is not a blocker. It is an intention checkpoint."
-
-## Suggested Pitch
-
-"Why Am I Here? is a Chrome extension for people who do not need more motivation quotes or stricter blockers. When you drift into a distracting site, it asks you to write why you are there before you continue. That tiny interruption converts unconscious browsing into an explicit choice, and the local history shows where your attention actually goes."
-
-## Next Improvements
-
-- Make timer changes reschedule the currently active tab immediately.
-- Add a daily summary: most interrupted domain, total checkpoints, and common time windows.
-- Add an option to export local history as JSON or CSV.
-- Reduce permissions before store submission or clearly explain why broad host access is needed.
+Why Am I Here? 不是一个更严格的网站封锁器。它是一个很小的意图检查点：在你无意识滑进信息流时，把你拉回来，让你重新决定自己为什么在这里。

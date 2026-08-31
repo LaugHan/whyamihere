@@ -160,7 +160,9 @@ async function scheduleTabTimer(tabId, url) {
     const { timerSeconds = DEFAULT_TIMER_SECONDS } = await chrome.storage.sync.get('timerSeconds');
     clearTabTimer(tabId);
     scheduleTimer(tabId, timerSeconds);
+    console.log('WAIH: scheduled tab', tabId, 'domain', rootDomain, 'timer', timerSeconds, 's');
   } catch (e) {
+    console.log('WAIH: scheduleTabTimer error', e && e.message);
     clearTabTimer(tabId);
     tabDomains.delete(tabId);
   }
@@ -173,8 +175,10 @@ function scheduleTimer(tabId, timerSeconds) {
   if (delaySeconds < ALARM_FLOOR_SECONDS) {
     const timeoutId = setTimeout(() => fireTimer(tabId), delaySeconds * 1000);
     tabTimeouts.set(tabId, timeoutId);
+    console.log('WAIH: setTimeout timer', tabId, delaySeconds, 's');
   } else {
     chrome.alarms.create(alarmName(tabId), { delayInMinutes: delaySeconds / 60 });
+    console.log('WAIH: alarm timer', tabId, delaySeconds, 's');
   }
 }
 
@@ -203,6 +207,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     // so clear the guard and allow scheduling again.
     overlayShowing.delete(tabId);
     // scheduleTabTimer internally checks whether this tab is its window's active tab
+    console.log('WAIH: onUpdated complete tab', tabId, tab.url);
     await scheduleTabTimer(tabId, tab.url);
   }
 });
@@ -222,6 +227,7 @@ chrome.tabs.onActivated.addListener(async ({ tabId }) => {
     windowActiveTabs.set(windowId, tabId);
 
     if (tab.url) {
+      console.log('WAIH: onActivated tab', tabId, tab.url);
       await scheduleTabTimer(tabId, tab.url);
     }
   } catch (e) { /* tab doesn't exist */ }
@@ -255,7 +261,10 @@ async function fireTimer(tabId) {
     const hostname = urlObj.hostname.replace(/^www\./, '');
     const rootDomain = await getRootDomain(hostname);
 
-    if (!rootDomain) return;
+    if (!rootDomain) {
+      console.log('WAIH: fireTimer no rootDomain for tab', tabId);
+      return;
+    }
 
     const snoozed = await isSnoozed(rootDomain);
     if (snoozed) {
@@ -269,13 +278,15 @@ async function fireTimer(tabId) {
     // "今天第 N 次" context: increment per-day per-domain counter, pass it down
     const dayCount = await incrementDayCount(rootDomain);
 
+    console.log('WAIH: firing overlay tab', tabId, 'domain', rootDomain, 'dayCount', dayCount);
     chrome.tabs.sendMessage(tabId, {
       type: 'SHOW_OVERLAY',
       domain: rootDomain,
       url: tab.url,
       dayCount,
-    }).catch(async () => {
+    }).catch(async (err) => {
       // Content script not ready — retry after a short delay
+      console.log('WAIH: sendMessage failed', tabId, err && err.message);
       overlayShowing.delete(tabId);
       const { timerSeconds = DEFAULT_TIMER_SECONDS } = await chrome.storage.sync.get('timerSeconds');
       scheduleTimer(tabId, timerSeconds);

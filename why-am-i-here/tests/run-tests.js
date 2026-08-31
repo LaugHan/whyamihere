@@ -111,13 +111,22 @@ function computeSnoozeUntil(hours, minutes, now = Date.now()) {
   return now + snoozeMs;
 }
 
-// Character counting
+// Character counting (P0: fair counting — CJK char = 1, latin word = 1, number run = 1)
 function countNonWhitespaceChars(text) {
   return text.replace(/\s/g, '').length;
 }
 
-function isMinCharsMet(text, min = 50) {
-  return countNonWhitespaceChars(text) >= min;
+function countIntentChars(text) {
+  const s = String(text || '');
+  const cjk = (s.match(/[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af\u3000-\u303f\uff00-\uffef]/g) || []).length;
+  const rest = s.replace(/[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af\u3000-\u303f\uff00-\uffef]/g, ' ');
+  const words = (rest.match(/[a-zA-Z]+/g) || []).length;
+  const nums = (rest.match(/\d+/g) || []).length;
+  return cjk + words + nums;
+}
+
+function isMinCharsMet(text, min = 10) {
+  return countIntentChars(text) >= min;
 }
 
 // Domain validation
@@ -321,11 +330,32 @@ test('only whitespace returns 0', () => {
   assertEqual(isMinCharsMet('   \n\t  ', 50), false);
 });
 
-test('exactly 50 non-whitespace chars meets minimum', () => {
-  // 50 chars
-  const text = '12345678901234567890123456789012345678901234567890';
-  assertEqual(countNonWhitespaceChars(text), 50);
+test('exactly 50 words meets minimum (fair counting)', () => {
+  // 50 latin words = 50 by fair counting (word = 1)
+  const text = Array(50).fill('word').join(' ');
+  assertEqual(countIntentChars(text), 50);
   assertEqual(isMinCharsMet(text, 50), true);
+});
+
+test('fair counting: number run counts as one', () => {
+  // 50 digits are ONE number run, not 50 chars
+  const text = '12345678901234567890123456789012345678901234567890';
+  assertEqual(countIntentChars(text), 1);
+  assertEqual(isMinCharsMet(text, 50), false);
+});
+
+test('fair counting: CJK = 1, latin word = 1, number run = 1', () => {
+  const text = '学习 Machine 1234 学习';
+  assertEqual(countIntentChars(text), 6); // 4 CJK + 1 word + 1 number run
+});
+
+test('10 CJK chars meet the new 10-char default minimum', () => {
+  const text = '查一下这个工具的官方文档';
+  assertEqual(isMinCharsMet(text), true); // default min is now 10
+});
+
+test('5 latin words do not meet 10-char default minimum', () => {
+  assertEqual(isMinCharsMet('one two three four five'), false); // 5 < 10
 });
 
 test('mixed CJK and ASCII counted correctly', () => {

@@ -11,7 +11,7 @@ const DEFAULT_DOMAINS = [
 ];
 
 const DEFAULT_TIMER_SECONDS = 60;
-const DEFAULT_MIN_CHARS = 50;
+const DEFAULT_MIN_CHARS = 10;
 
 // chrome.alarms has a 30s minimum delay in packaged builds; short timers
 // (demo mode, <30s) must use setTimeout instead of alarms.
@@ -28,7 +28,7 @@ const overlayShowing = new Set();
 
 // ====== Initialization ======
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.storage.sync.get(['domains', 'timerSeconds', 'minChars'], (result) => {
+  chrome.storage.sync.get(['domains', 'timerSeconds', 'minChars', 'minCharsUserSet'], (result) => {
     if (!result.domains) {
       chrome.storage.sync.set({ domains: DEFAULT_DOMAINS });
     }
@@ -37,6 +37,10 @@ chrome.runtime.onInstalled.addListener(() => {
     }
     if (!result.minChars) {
       chrome.storage.sync.set({ minChars: DEFAULT_MIN_CHARS });
+    } else if (result.minChars === 50 && result.minCharsUserSet !== true) {
+      // One-time migration for the P0 redesign: default 50-char essay -> 10-char intent
+      // (only if the user never explicitly customized the threshold)
+      chrome.storage.sync.set({ minChars: DEFAULT_MIN_CHARS, minCharsUserSet: true });
     }
   });
 });
@@ -83,6 +87,22 @@ async function setSnooze(domain, untilTimestamp) {
   const { snoozeMap = {} } = await chrome.storage.local.get('snoozeMap');
   snoozeMap[domain] = untilTimestamp;
   await chrome.storage.local.set({ snoozeMap });
+}
+
+// ====== Day counters (for "第 N 次" context badge & progressive escalation) ======
+async function incrementDayCount(domain) {
+  const today = new Date().toISOString().slice(0, 10);
+  const { dayCounts = {} } = await chrome.storage.local.get('dayCounts');
+  const day = dayCounts[today] || {};
+  day[domain] = (day[domain] || 0) + 1;
+  dayCounts[today] = day;
+  // Keep only the last 14 days
+  const keys = Object.keys(dayCounts).sort();
+  while (keys.length > 14) {
+    delete dayCounts[keys.shift()];
+  }
+  await chrome.storage.local.set({ dayCounts });
+  return day[domain];
 }
 
 // ====== Per-tab timer scheduling ======
@@ -223,10 +243,14 @@ async function fireTimer(tabId) {
     // Fire! Mark overlay as showing to prevent re-scheduling
     overlayShowing.add(tabId);
 
+    // "今天第 N 次" context: increment per-day per-domain counter, pass it down
+    const dayCount = await incrementDayCount(rootDomain);
+
     chrome.tabs.sendMessage(tabId, {
       type: 'SHOW_OVERLAY',
       domain: rootDomain,
       url: tab.url,
+      dayCount,
     }).catch(async () => {
       // Content script not ready — retry after a short delay
       overlayShowing.delete(tabId);
@@ -323,6 +347,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       tabDomains.delete(sender.tab.id);
     }
     sendResponse({ success: true });
+    return true;
+  }
+
+  if (message.type === 'CLOSE_TAB') {
+    // "我没目的，关掉它" — close the current monitored tab
+    if (sender.tab && sender.tab.id) {
+      overlayShowing.delete(sender.tab.id);
+      clearTabTimer(sender.tab.id);
+      tabDomains.delete(sender.tab.id);
+      chrome.tabs.remove(sender.tab.id).catch(() => {});
+    }
+    sendResponse({ success: true });
+    return true;
+  }
+
+  if (message.type === 'SKIP_EVENT') {
+    // Long-press skip: NOT written to history, only bumps a local counter
+    const domain = message.domain;
+    const today = new Date().toISOString().slice(0, 10);
+    chrome.storage.local.get('dayCounts', (result) => {
+      const dayCounts = result.dayCounts || {};
+      const day = dayCounts[today] || {};
+      day[`${domain}:skip`] = (day[`${domain}:skip`] || 0) + 1;
+      dayCounts[today] = day;
+      chrome.storage.local.set({ dayCounts }, () => {
+        sendResponse({ success: true });
+      });
+    });
     return true;
   }
 

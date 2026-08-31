@@ -105,18 +105,20 @@ document.addEventListener('DOMContentLoaded', () => {
   function loadSettings() {
     chrome.storage.sync.get(['timerSeconds', 'minChars'], (result) => {
       timerSecondsInput.value = result.timerSeconds || 60;
-      minCharsInput.value = result.minChars || 50;
+      minCharsInput.value = result.minChars || 10;
     });
   }
 
   function saveSettings(successMessage = '设置已保存') {
     const timerSeconds = clampNumber(timerSecondsInput.value, 3, 3600, 60);
-    const minChars = clampNumber(minCharsInput.value, 1, 300, 50);
+    const minChars = clampNumber(minCharsInput.value, 1, 300, 10);
 
     timerSecondsInput.value = timerSeconds;
     minCharsInput.value = minChars;
 
-    chrome.storage.sync.set({ timerSeconds, minChars }, () => {
+    // minCharsUserSet marks an explicit user choice so the one-time
+    // 50 -> 10 migration in background.js never overrides it.
+    chrome.storage.sync.set({ timerSeconds, minChars, minCharsUserSet: true }, () => {
       settingsStatus.textContent = successMessage;
       window.setTimeout(() => {
         settingsStatus.textContent = '';

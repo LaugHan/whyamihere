@@ -105,9 +105,21 @@ document.addEventListener('DOMContentLoaded', () => {
       const timeStr = date.toLocaleTimeString('zh-CN', {
         hour: '2-digit', minute: '2-digit',
       });
-      const snoozeStr = entry.snoozeHours || entry.snoozeMinutes
-        ? `设定免打扰：${entry.snoozeHours || 0} 小时 ${entry.snoozeMinutes || 0} 分钟后`
-        : '';
+      const snoozeStr = entry.outcome === 'graze'
+        ? ''
+        : (entry.snoozeHours || entry.snoozeMinutes
+          ? `设定免打扰：${entry.snoozeHours || 0} 小时 ${entry.snoozeMinutes || 0} 分钟后`
+          : '');
+
+      // Display copy for outcome-aware entries (no written reason)
+      let reasonHtml;
+      if (entry.outcome === 'no_purpose_close') {
+        reasonHtml = '<span class="outcome-tag outcome-close">🚪 没目的，关掉了页面</span>';
+      } else if (entry.outcome === 'graze') {
+        reasonHtml = `<span class="outcome-tag outcome-graze">⏳ 限时放风 ${entry.snoozeMinutes || 0} 分钟</span>`;
+      } else {
+        reasonHtml = escapeHtml(entry.reason || '');
+      }
 
       // Show URL if available
       const urlHtml = entry.url
@@ -128,7 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <span class="domain-tag">${escapeHtml(entry.domain)}</span>
             <span class="card-time">${dateStr} ${timeStr}</span>
           </div>
-          <div class="card-reason">${escapeHtml(entry.reason)}</div>
+          <div class="card-reason">${reasonHtml}</div>
           ${urlHtml}
           ${snoozeStr ? `<div class="card-snooze">${escapeHtml(snoozeStr)}</div>` : ''}
           ${cancelBtnHtml}

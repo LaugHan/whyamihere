@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>交互稿：弹窗重设计对比 - Why Am I Here?</title>
+<style>
+  :root {
+    --brand-dark: #1a1a2e;
+    --brand-orange: #ff9800;
+    --brand-orange-deep: #e65100;
+    --brand-orange-bg: #fff3e0;
+    --ink: #1a1a2e;
+    --ink-2: #555;
+    --ink-3: #999;
+    --ok: #2e7d32;
+    --line: #ececec;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #f6f6f6;
+    color: var(--ink);
+  }
+
+  /* ===== 仿知乎信息流 ===== */
+  .site-nav {
+    position: sticky; top: 0; z-index: 50;
+    background: #fff; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 24px;
+    padding: 0 32px; height: 56px;
+  }
+  .site-logo { font-weight: 800; font-size: 20px; color: #056de8; letter-spacing: -0.5px; }
+  .fake-search {
+    flex: 0 1 360px; height: 34px; border-radius: 17px;
+    background: #f6f6f6; border: 1px solid var(--line);
+    color: var(--ink-3); font-size: 13px;
+    display: flex; align-items: center; padding: 0 16px;
+  }
+  .nav-items { display: flex; gap: 22px; font-size: 14px; color: var(--ink-2); }
+  .nav-items .on { color: var(--ink); font-weight: 700; }
+
+  /* 统计条（改进版的反馈闭环演示） */
+  .stats-bar {
+    position: sticky; top: 56px; z-index: 49;
+    background: linear-gradient(90deg, #fff, #fff8ef);
+    border-bottom: 1px solid #f3e3c8;
+    padding: 8px 32px; font-size: 12.5px; color: var(--ink-2);
+    display: flex; gap: 18px; align-items: center; flex-wrap: wrap;
+  }
+  .stats-bar b { color: var(--brand-orange-deep); }
+  .stats-bar .dot { color: #ddd; }
+
+  .feed { max-width: 700px; margin: 20px auto 120px; padding: 0 16px; }
+  .card {
+    background: #fff; border-radius: 12px; padding: 20px 22px;
+    margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .card h3 { margin: 0 0 8px; font-size: 17px; line-height: 1.5; font-weight: 650; }
+  .card p { margin: 0; font-size: 14px; color: var(--ink-2); line-height: 1.75; }
+  .card .meta { margin-top: 12px; font-size: 12px; color: #b0b0b0; display: flex; gap: 14px; }
+
+  /* ===== 演示控制台 ===== */
+  .demo-bar {
+    position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; z-index: 300;
+    background: rgba(26,26,46,0.96); color: #fff;
+    border-radius: 16px; padding: 12px 16px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.35);
+    max-width: calc(100vw - 24px);
+  }
+  .demo-bar .lbl { font-size: 12px; color: #9aa; margin-right: 2px; }
+  .demo-btn {
+    border: none; border-radius: 10px; padding: 9px 16px;
+    font-size: 13.5px; font-weight: 600; cursor: pointer; font-family: inherit;
+    transition: transform .12s, opacity .12s;
+  }
+  .demo-btn:active { transform: scale(0.96); }
+  .demo-btn.old { background: #fff; color: var(--brand-dark); }
+  .demo-btn.new { background: var(--brand-orange); color: #fff; }
+  .demo-btn.ghost { background: transparent; color: #9aa; border: 1px solid #445; }
+  .demo-btn:disabled { opacity: .4; cursor: not-allowed; }
+  .demo-status { font-size: 12px; color: #cdd3e0; width: 100%; text-align: center; min-height: 15px; }
+
+  /* ===== 对比要点浮层 ===== */
+  .notes {
+    position: fixed; right: 16px; bottom: 96px; z-index: 290;
+    width: 300px; background: #fff; border-radius: 14px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+    padding: 16px 18px; font-size: 12.5px; line-height: 1.7; color: var(--ink-2);
+    display: none;
+  }
+  .notes.show { display: block; }
+  .notes h4 { margin: 0 0 6px; font-size: 13px; color: var(--ink); }
+  .notes ul { margin: 0 0 10px; padding-left: 18px; }
+  .notes li { margin-bottom: 2px; }
+
+  /* ===== Toast ===== */
+  .toast-wrap { position: fixed; left: 20px; bottom: 96px; z-index: 400; display: flex; flex-direction: column; gap: 8px; }
+  .toast {
+    background: rgba(26,26,46,0.95); color: #fff; font-size: 13px;
+    padding: 10px 16px; border-radius: 10px; max-width: 340px;
+    animation: toastIn .25s cubic-bezier(0.16,1,0.3,1);
+    box-shadow: 0 6px 24px rgba(0,0,0,0.25);
+  }
+  @keyframes toastIn { from { opacity: 0; transform: translateY(12px);} to { opacity: 1; transform: none;} }
+
+  /* ===== 现行版弹窗（忠实复刻 content.js） ===== */
+  .old-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 2147483646;
+    display: flex; align-items: flex-start; justify-content: flex-end;
+  }
+  .old-panel {
+    position: fixed; top: 20px; right: 20px; width: 380px;
+    max-height: calc(100vh - 40px); background: #fff; border-radius: 16px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.2), 0 0 0 1px rgba(0,0,0,0.05);
+    overflow-y: auto; animation: oldSlide .35s cubic-bezier(0.16,1,0.3,1);
+    z-index: 2147483647;
+  }
+  @keyframes oldSlide { from { transform: translateX(120%); opacity: 0;} to { transform: none; opacity: 1;} }
+  .old-panel .hd { padding: 20px 24px 0; }
+  .old-panel .hd h2 { margin: 0; font-size: 18px; }
+  .old-panel .hd h2 small { font-size: 12px; color: #999; font-weight: 400; }
+  .old-panel .bd { padding: 16px 24px; }
+  .old-badge { display: inline-block; background: var(--brand-orange-bg); color: var(--brand-orange-deep);
+    font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 20px; margin-bottom: 12px; }
+  .old-prompt { font-size: 14px; color: #555; line-height: 1.6; margin: 0 0 16px; }
+  .old-prompt strong { color: var(--ink); }
+  .old-panel textarea {
+    width: 100%; min-height: 90px; padding: 12px 14px; border: 2px solid #e0e0e0; border-radius: 10px;
+    font-size: 14px; line-height: 1.6; resize: vertical; outline: none; font-family: inherit;
+  }
+  .old-panel textarea:focus { border-color: var(--brand-orange); }
+  .old-counter { display: flex; justify-content: flex-end; font-size: 12px; color: #999; margin-top: 6px; }
+  .old-counter.warn { color: var(--brand-orange-deep); }
+  .old-counter.ok { color: var(--ok); }
+  .old-snooze { margin-top: 16px; background: #fafafa; border-radius: 10px; padding: 14px 16px; }
+  .old-snooze label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+  .old-presets { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .old-preset {
+    padding: 5px 12px; border: 1.5px solid #ddd; background: #fff; border-radius: 20px;
+    font-size: 12px; cursor: pointer; font-family: inherit;
+  }
+  .old-preset.active { background: var(--brand-orange-bg); border-color: var(--brand-orange); color: var(--brand-orange-deep); font-weight: 600; }
+  .old-submit {
+    width: 100%; padding: 12px; margin-top: 16px; background: var(--brand-dark); color: #fff;
+    border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit;
+  }
+  .old-submit:disabled { background: #ccc; cursor: not-allowed; }
+  .old-note { text-align: center; font-size: 11px; color: #bbb; margin-top: 10px; padding-bottom: 4px; }
+
+  /* ===== 改进版：预警胶囊 ===== */
+  .warn-pill {
+    position: fixed; top: 70px; right: 20px; z-index: 260;
+    background: rgba(26,26,46,0.96); color: #fff;
+    border-radius: 14px; padding: 12px 16px; width: 320px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+    animation: pillIn .35s cubic-bezier(0.16,1,0.3,1);
+    font-size: 13px; line-height: 1.6;
+  }
+  @keyframes pillIn { from { transform: translateX(120%); opacity: 0;} to { transform: none; opacity: 1;} }
+  .warn-pill .t { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .warn-pill .t b { font-size: 13.5px; }
+  .warn-pill .count { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--brand-orange); font-weight: 700; }
+  .warn-pill .acts { display: flex; gap: 8px; }
+  .warn-pill .acts button {
+    flex: 1; border: none; border-radius: 8px; padding: 7px 0; font-size: 12.5px;
+    font-family: inherit; cursor: pointer; font-weight: 600;
+  }
+  .warn-pill .answer-now { background: var(--brand-orange); color: #fff; }
+  .warn-pill .not-today { background: #39394f; color: #cfd4e0; }
+
+  /* ===== 改进版：检查点面板（非模态） ===== */
+  .new-panel {
+    position: fixed; top: 64px; right: 20px; z-index: 261;
+    width: 396px; max-height: calc(100vh - 90px); overflow-y: auto;
+    background: #fff; border-radius: 16px;
+    box-shadow: 0 12px 48px rgba(0,0,0,0.22), 0 0 0 1px rgba(0,0,0,0.05);
+    padding: 18px 20px 16px;
+    animation: pillIn .35s cubic-bezier(0.16,1,0.3,1);
+  }
+  .new-panel .q-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .new-panel .q-head h2 { margin: 0; font-size: 17px; letter-spacing: -0.2px; }
+  .badge-nth {
+    margin-left: auto; background: #eef4ff; color: #2b5fd9; font-size: 11.5px; font-weight: 600;
+    padding: 3px 9px; border-radius: 20px; white-space: nowrap;
+  }
+  .badge-nth.hot { background: #fdeeee; color: #c62828; }
+  .new-panel .q-sub { font-size: 12.5px; color: var(--ink-3); margin: 2px 0 14px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 10px; }
+  .chip {
+    border: 1.5px solid #e2e2e2; background: #fff; color: var(--ink-2);
+    border-radius: 20px; padding: 6px 13px; font-size: 13px; cursor: pointer; font-family: inherit;
+    transition: all .15s;
+  }
+  .chip:hover { border-color: var(--brand-orange); color: var(--brand-orange-deep); }
+  .chip.on { background: var(--brand-orange-bg); border-color: var(--brand-orange); color: var(--brand-orange-deep); font-weight: 650; }
+  .new-panel textarea {
+    width: 100%; min-height: 54px; padding: 10px 13px; border: 2px solid #ececec;
+    border-radius: 10px; font-size: 13.5px; line-height: 1.6; resize: vertical; outline: none;
+    font-family: inherit; transition: border-color .2s;
+  }
+  .new-panel textarea:focus { border-color: var(--brand-orange); }
+  .new-counter { text-align: right; font-size: 11.5px; color: var(--ink-3); margin-top: 4px; height: 14px; }
+  .new-counter.ok { color: var(--ok); }
+  .snooze-row {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+    margin-top: 12px; font-size: 12px; color: var(--ink-3);
+  }
+  .snooze-row .sc, .graze-picker .sc {
+    border: 1.5px solid #e6e6e6; background: #fff; border-radius: 16px;
+    padding: 4px 11px; font-size: 12px; cursor: pointer; font-family: inherit; color: var(--ink-2);
+    transition: all .15s;
+  }
+  .snooze-row .sc:hover, .graze-picker .sc:hover { border-color: var(--brand-orange); color: var(--brand-orange-deep); }
+  .snooze-row .sc.on, .graze-picker .sc.on {
+    background: var(--brand-orange-bg); border-color: var(--brand-orange);
+    color: var(--brand-orange-deep); font-weight: 650;
+  }
+  .graze-picker {
+    margin-top: 8px; background: #fffdf8; border: 1.5px dashed #ecdfc8; border-radius: 10px;
+    padding: 10px 12px; font-size: 12px; color: var(--ink-2);
+    display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+    animation: toastIn .2s ease;
+  }
+  .graze-picker[hidden] { display: none; }
+  .btn-go {
+    width: 100%; margin-top: 10px; padding: 12px; border: none; border-radius: 10px;
+    background: var(--brand-dark); color: #fff; font-size: 14.5px; font-weight: 650;
+    cursor: pointer; font-family: inherit; transition: background .2s;
+  }
+  .btn-go:hover:not(:disabled) { background: #2c2c4a; }
+  .btn-go:disabled { background: #d8d8de; color: #fff; cursor: not-allowed; }
+  .or-line { display: flex; align-items: center; gap: 10px; color: #c9c9c9; font-size: 11.5px; margin: 14px 0 10px; }
+  .or-line::before, .or-line::after { content: ""; flex: 1; height: 1px; background: #ececec; }
+  .exit-row { display: flex; gap: 8px; }
+  .btn-exit {
+    flex: 1; padding: 10px 6px; border-radius: 10px; font-size: 13px; font-weight: 600;
+    cursor: pointer; font-family: inherit; border: 1.5px solid #e6e0d5; background: #fffdf8; color: var(--ink-2);
+    transition: all .15s;
+  }
+  .btn-exit.primary { background: #fff6ec; border-color: #f3d9ae; color: var(--brand-orange-deep); }
+  .btn-exit:hover { border-color: var(--brand-orange); }
+  .btn-exit small { display: block; font-weight: 400; font-size: 10.5px; color: #a89f90; margin-top: 2px; }
+  .hold-skip {
+    position: relative; overflow: hidden; margin-top: 12px; width: 100%;
+    border: none; background: transparent; color: #b9b9c3; font-size: 12px;
+    padding: 8px 0; cursor: pointer; font-family: inherit; border-radius: 8px;
+  }
+  .hold-skip .fill {
+    position: absolute; inset: 0; width: 0%; background: #eeeef4; z-index: 0;
+  }
+  .hold-skip span { position: relative; z-index: 1; }
+  .new-panel .kbd-hint { font-size: 11px; color: #c5c5cf; text-align: center; margin-top: 8px; }
+  .new-panel .kbd-hint kbd {
+    background: #f3f3f6; border-radius: 4px; padding: 1px 5px; font-size: 10px; border: 1px solid #e5e5ec;
+  }
+
+  /* ===== 放风模式 ===== */
+  .graze-badge {
+    position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 259;
+    background: var(--brand-orange); color: #fff; border-radius: 20px;
+    padding: 7px 18px; font-size: 13px; font-weight: 650;
+    box-shadow: 0 6px 24px rgba(255,152,0,0.45);
+    display: flex; align-items: center; gap: 10px;
+    font-variant-numeric: tabular-nums;
+  }
+  .graze-badge .end-early {
+    background: rgba(255,255,255,0.25); border: none; color: #fff; border-radius: 12px;
+    font-size: 11.5px; padding: 3px 10px; cursor: pointer; font-family: inherit;
+  }
+  body.grazing::after {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 258;
+    box-shadow: inset 0 0 0 4px rgba(255,152,0,0.55);
+  }
+
+  /* ===== 「标签页已关闭」演示 ===== */
+  .closed-screen {
+    position: fixed; inset: 0; z-index: 320; background: #f6f6f6;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+    text-align: center; padding: 30px;
+  }
+  .closed-screen .big { font-size: 46px; }
+  .closed-screen h3 { margin: 0; font-size: 19px; }
+  .closed-screen p { margin: 0; color: var(--ink-2); font-size: 13.5px; line-height: 1.8; max-width: 430px; }
+  .closed-screen .acts { display: flex; gap: 10px; margin-top: 8px; }
+  .closed-screen button {
+    border: none; border-radius: 10px; padding: 11px 22px; font-size: 14px; font-weight: 600;
+    cursor: pointer; font-family: inherit;
+  }
+  .closed-screen .restore { background: var(--brand-dark); color: #fff; }
+
+  @media (max-width: 560px) {
+    .new-panel, .old-panel { width: calc(100vw - 24px); right: 12px; }
+    .warn-pill { width: calc(100vw - 24px); right: 12px; }
+  }
+</style>
+</head>
+<body>
+
+  <!-- 仿知乎页面 -->
+  <nav class="site-nav">
+    <span class="site-logo">仿知乎</span>
+    <div class="fake-search">🔍 搜索你感兴趣的内容…</div>
+    <div class="nav-items"><span class="on">推荐</span><span>热榜</span><span>关注</span><span>视频</span></div>
+  </nav>
+
+  <div class="stats-bar" id="statsBar">
+    <span>🧭 演示统计（改进版新增的反馈闭环）：</span>
+    <span>今日打断 <b id="stInterrupt">0</b> 次</span><span class="dot">·</span>
+    <span>救回 <b id="stSaved">0</b> 次</span><span class="dot">·</span>
+    <span>放风 <b id="stGraze">0</b> 次</span><span class="dot">·</span>
+    <span>跳过 <b id="stSkip">0</b> 次</span>
+    <span style="margin-left:auto;color:#c2a877">正式版这里显示：距下次打扰 / 今日摘要</span>
+  </div>
+
+  <main class="feed" id="feed">
+    <div class="card"><h3>为什么 PhD 读到第三年，反而比本科更难开始做事了？</h3><p>高中和本科的时候，有考试、DDL、同学竞争、老师安排，这些都是外部动力。到了 PhD，外部动力突然少了很多，而内部动力又不是自动生成的……</p><div class="meta"><span>1.2k 赞</span><span>348 评论</span><span>12 分钟前</span></div></div>
+    <div class="card"><h3>有哪些你以为很简单、实际上极其困难的研究问题？</h3><p>评论区已经有 800+ 个回答，从「证明 1+1=2」到「让大模型数对 straw 里的字母 r」……</p><div class="meta"><span>3.4k 赞</span><span>1.1k 评论</span><span>1 小时前</span></div></div>
+    <div class="card"><h3>独居之后，你的自律系统崩塌了吗？</h3><p>本科的时候看到室友在卷，自己也会开始卷。独居以后没有同辈的直接压力，打开电脑的默认动作从写代码变成了刷信息流……</p><div class="meta"><span>986 赞</span><span>212 评论</span><span>3 小时前</span></div></div>
+    <div class="card"><h3>如何用一行 CSS 毁掉一个产品的体验？</h3><p>答案：position: fixed; inset: 0; 再加一层半透明黑色遮罩。用户正在打字的时候弹出来，效果最佳……</p><div class="meta"><span>2.1k 赞</span><span>556 评论</span><span>5 小时前</span></div></div>
+    <div class="card"><h3>信息流产品是如何利用「下次一定」心理的？</h3><p>无限滚动 + 自动加载 + 永远差一点就看完的推荐队列。你以为你在选择看什么，其实是队列永远不为空……</p><div class="meta"><span>1.7k 赞</span><span>403 评论</span><span>7 小时前</span></div></div>
+    <div class="card"><h3>有哪些小工具真的改变了你的工作习惯？</h3><p>不是又一个 TODO App，也不是更狠的网站封锁器。是一个每次刷起知乎都会问我「你为什么在这」的浏览器扩展……</p><div class="meta"><span>860 赞</span><span>178 评论</span><span>昨天</span></div></div>
+  </main>
+
+  <!-- 演示控制台 -->
+  <div class="demo-bar">
+    <span class="lbl">交互稿</span>
+    <button class="demo-btn old" id="btnOld">① 体验现行版</button>
+    <button class="demo-btn new" id="btnNew">② 体验改进版</button>
+    <button class="demo-btn ghost" id="btnNotes">对比要点</button>
+    <button class="demo-btn ghost" id="btnReset">重置</button>
+    <div class="demo-status" id="demoStatus"></div>
+  </div>
+
+  <div class="notes" id="notes">
+    <h4>⬅️ 现行版的断点</h4>
+    <ul>
+      <li>全屏遮罩，页面不可交互</li>
+      <li>必须写满 <b>50 字</b>，无任何出口</li>
+      <li>官方 placeholder 示例只有约 18 字——照着示例写也提交不了</li>
+      <li>0.4 秒后自动抢走键盘焦点</li>
+      <li>文案永远不变 → 快速习惯化</li>
+    </ul>
+    <h4>➡️ 改进版的对应解法</h4>
+    <ul>
+      <li>非模态：页面仍可滚动，不抢正在打字的焦点</li>
+      <li>三岔路口：有目的（一键）/ 没目的（关掉·放风）/ 长按跳过</li>
+      <li>门槛降为 10 字，中英文公平计数</li>
+      <li>预警胶囊：预告代替跳变，可提前处理</li>
+      <li>「今天第 N 次」上下文 + 文案轮换</li>
+    </ul>
+    <div style="color:#bbb">详见仓库 <b>ux-optimization.md</b></div>
+  </div>
+
+  <div class="toast-wrap" id="toasts"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var statusEl = $('demoStatus');
+  function status(t) { statusEl.textContent = t || ''; }
+
+  function toast(text, ms) {
+    var el = document.createElement('div');
+    el.className = 'toast';
+    el.textContent = text;
+    $('toasts').appendChild(el);
+    setTimeout(function () { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; }, ms || 2600);
+    setTimeout(function () { el.remove(); }, (ms || 2600) + 350);
+  }
+
+  // ====== 演示状态 ======
+  var state = { interrupt: 0, saved: 0, graze: 0, skip: 0, active: null };
+
+  function bump(key) {
+    state[key]++;
+    $('stInterrupt').textContent = state.interrupt;
+    $('stSaved').textContent = state.saved;
+    $('stGraze').textContent = state.graze;
+    $('stSkip').textContent = state.skip;
+  }
+
+  function resetAll() {
+    ['oldBack','warnPill','newPanel','grazeBadge','closedScreen'].forEach(function (id) {
+      var el = $(id); if (el) el.remove();
+    });
+    document.body.classList.remove('grazing');
+    clearInterval(warnTimer); clearInterval(grazeTimer);
+    state = { interrupt: 0, saved: 0, graze: 0, skip: 0, active: null };
+    $('stInterrupt').textContent = 0;
+    $('stSaved').textContent = 0;
+    $('stGraze').textContent = 0;
+    $('stSkip').textContent = 0;
+    status('已重置');
+  }
+  $('btnReset').addEventListener('click', resetAll);
+
+  $('btnNotes').addEventListener('click', function () {
+    $('notes').classList.toggle('show');
+  });
+
+  function guard(which) {
+    if (state.active) {
+      toast('请先处理当前的弹窗（或点「重置」）');
+      return false;
+    }
+    state.active = which;
+    return true;
+  }
+
+  /* =====================================================
+   * ① 现行版：忠实复刻 content.js 的弹窗
+   * =================================================== */
+  $('btnOld').addEventListener('click', function () {
+    if (!guard('old')) return;
+    status('现行版：试着把 placeholder 的示例原样写进去 → 提交不了（示例只有约 18 字）');
+    var MIN = 50;
+
+    var back = document.createElement('div');
+    back.className = 'old-backdrop';
+    back.id = 'oldBack';
+    back.innerHTML =
+      '<div class="old-panel">' +
+        '<div class="hd"><h2>Why Am I Here? <small>/ 我咋在这？</small></h2></div>' +
+        '<div class="bd">' +
+          '<span class="old-badge">zhihu.com</span>' +
+          '<p class="old-prompt">你已经在 <strong>zhihu.com</strong> 停留了一段时间。<br>请写下你打开这个网站的<strong>目的</strong>（至少 50 字）：</p>' +
+          '<textarea id="oldTa" placeholder="例如：我想查找关于机器学习的整理贴，收集资料..." maxlength="300"></textarea>' +
+          '<div class="old-counter warn" id="oldCounter">0 / 50 字（未达标）</div>' +
+          '<div class="old-snooze"><label>选择下次提醒时间：</label>' +
+            '<div class="old-presets">' +
+              '<button class="old-preset">30 分钟</button>' +
+              '<button class="old-preset active">1 小时</button>' +
+              '<button class="old-preset">2 小时</button>' +
+              '<button class="old-preset">4 小时</button>' +
+              '<button class="old-preset">12 小时</button>' +
+            '</div>' +
+          '</div>' +
+          '<button class="old-submit" id="oldSubmit" disabled>我想好了，提交</button>' +
+          '<div class="old-note">写下来，把思路拉回来</div>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(back);
+
+    var ta = back.querySelector('#oldTa');
+    var counter = back.querySelector('#oldCounter');
+    var submit = back.querySelector('#oldSubmit');
+
+    back.querySelectorAll('.old-preset').forEach(function (b) {
+      b.addEventListener('click', function () {
+        back.querySelectorAll('.old-preset').forEach(function (x) { x.classList.remove('active'); });
+        b.classList.add('active');
+      });
+    });
+
+    function update() {
+      var len = ta.value.replace(/\s/g, '').length;
+      if (len >= MIN) {
+        counter.textContent = len + ' / ' + MIN + ' 字 ✓';
+        counter.className = 'old-counter ok';
+        submit.disabled = false;
+        submit.textContent = '我想好了，提交';
+      } else {
+        counter.textContent = len + ' / ' + MIN + ' 字（未达标）';
+        counter.className = 'old-counter warn';
+        submit.disabled = true;
+        submit.textContent = '还差 ' + (MIN - len) + ' 字，继续写...';
+      }
+    }
+    ta.addEventListener('input', update);
+
+    // 复刻现行版的「0.4 秒后抢焦点」——如果你正在上面的搜索框打字，会被打断
+    setTimeout(function () { ta.focus(); }, 400);
+
+    submit.addEventListener('click', function () {
+      back.remove();
+      state.active = null;
+      toast('（现行版到这里结束：写入历史 + 设置免打扰）注意你刚才为凑 50 字花了多久？');
+      status('');
+    });
+  });
+
+  /* =====================================================
+   * ② 改进版：预警胶囊 → 三岔路口 → 出口
+   * =================================================== */
+  var warnTimer = null, grazeTimer = null;
+
+  $('btnNew').addEventListener('click', function () {
+    if (!guard('new')) return;
+    status('改进版第一步：预警胶囊（预告代替跳变）。可以等它数完，也可以现在就答 / 今天先不问。');
+    startWarnPill(15);
+  });
+
+  function startWarnPill(seconds) {
+    var left = seconds;
+    var pill = document.createElement('div');
+    pill.className = 'warn-pill';
+    pill.id = 'warnPill';
+    pill.innerHTML =
+      '<div class="t">⏳ <b>即将问你：为什么在这里？</b><span class="count" id="wpCount"></span></div>' +
+      '<div style="color:#cfd4e0;margin-bottom:10px">还在看？没问题，只是提醒一下 —— 正式版中此刻页面完全可用、不打断。</div>' +
+      '<div class="acts">' +
+        '<button class="answer-now" id="wpAnswer">现在就答</button>' +
+        '<button class="not-today" id="wpLater">今天先不问</button>' +
+      '</div>';
+    document.body.appendChild(pill);
+    var countEl = pill.querySelector('#wpCount');
+
+    function tick() {
+      countEl.textContent = left + 's';
+      if (left <= 0) { clearInterval(warnTimer); pill.remove(); openCheckpoint(false); return; }
+      left--;
+    }
+    tick();
+    warnTimer = setInterval(tick, 1000);
+
+    pill.querySelector('#wpAnswer').addEventListener('click', function () {
+      clearInterval(warnTimer); pill.remove(); openCheckpoint(false);
+    });
+    pill.querySelector('#wpLater').addEventListener('click', function () {
+      clearInterval(warnTimer); pill.remove();
+      state.active = null;
+      toast('已延后 10 分钟（提前出口：正事用户在这里就能便宜地离开）✓');
+      status('「今天先不问」= 便宜的提前出口。重新点「体验改进版」可再来。');
+    });
+  }
+
+  // 智能计数：中文字=1，英文单词=1，数字串=1
+  function smartLen(text) {
+    var m = text.match(/[\u4e00-\u9fff]|[a-zA-Z]+|\d+/g);
+    return m ? m.length : 0;
+  }
+
+  var QUESTIONS = [
+    { q: '你为什么打开这个网站？', sub: '选一个，或者写一句。10 个字就够。' },
+    { q: '这一次，你本来要做什么来着？', sub: '想起来就写下来，想不起来也没关系。' },
+    { q: '你现在最该做的一件事是什么？', sub: '不用写长，一个动词加一个对象就行。' },
+    { q: '和上一次的理由一样吗？', sub: '如果一样，点一下就行；如果不一样，也许值得想一想。' }
+  ];
+
+  function openCheckpoint(afterGraze) {
+    state.active = 'checkpoint';
+    bump('interrupt');
+    var nth = state.interrupt;
+    var hot = nth >= 3;
+    var qa = afterGraze
+      ? { q: '放风结束了 —— 还要继续吗？', sub: '时间到了。再选一次：继续（可选免打扰时长）、关掉，或再放风一次。' }
+      : QUESTIONS[(nth - 1) % QUESTIONS.length];
+
+    var CHIPS = ['查资料', '看关注的更新', '找一个具体问题', '查一个教程/视频', '顺便休息一下'];
+
+    // 免打扰时长：默认 1 小时；第 3 次起选项自动变短（递进策略）
+    var snoozeOpts = hot
+      ? [{ v: 10, l: '10 分钟' }, { v: 15, l: '15 分钟' }, { v: 30, l: '30 分钟' }]
+      : [{ v: 15, l: '15 分钟' }, { v: 30, l: '30 分钟' }, { v: 60, l: '1 小时' }, { v: 120, l: '2 小时' }, { v: 240, l: '4 小时' }];
+    var snoozeVal = hot ? 15 : 60;
+    var snoozeLabel = hot ? '15 分钟' : '1 小时';
+    var snoozeHtml = snoozeOpts.map(function (o) {
+      return '<button class="sc' + (o.v === snoozeVal ? ' on' : '') + '" data-v="' + o.v + '" data-l="' + o.l + '">' + o.l + '</button>';
+    }).join('');
+
+    // 放风时长：3 / 5 / 10 分钟（第 3 次起最长 5 分钟）
+    var grazeOpts = hot ? [3, 5] : [3, 5, 10];
+    var grazeHtml = grazeOpts.map(function (m) {
+      return '<button class="sc' + (m === 5 ? ' on' : '') + '" data-m="' + m + '">' + m + ' 分钟</button>';
+    }).join('');
+
+    var panel = document.createElement('div');
+    panel.className = 'new-panel';
+    panel.id = 'newPanel';
+    panel.innerHTML =
+      '<div class="q-head"><h2>' + qa.q + '</h2>' +
+        '<span class="badge-nth' + (hot ? ' hot' : '') + '">' + (hot ? '今天第 ' + nth + ' 次' : '今天第 ' + nth + ' 次') + '</span></div>' +
+      '<div class="q-sub">' + qa.sub + (hot ? '（第 3 次起，免打扰选项会自动变短、跳过会更慢）' : '') + '</div>' +
+      '<div class="chips" id="npChips">' + CHIPS.map(function (c) { return '<button class="chip">' + c + '</button>'; }).join('') + '</div>' +
+      '<textarea id="npTa" placeholder="或写一句（至少 10 字）：例如「查 GIL 相关的整理贴」"></textarea>' +
+      '<div class="new-counter" id="npCounter">0 / 10</div>' +
+      '<div class="snooze-row">之后 <span id="npSnoozeChips">' + snoozeHtml + '</span> 内不再打扰</div>' +
+      '<button class="btn-go" id="npGo" disabled>继续浏览 · ' + snoozeLabel + '内不再打扰</button>' +
+      '<div class="or-line">或者</div>' +
+      '<div class="exit-row">' +
+        '<button class="btn-exit primary" id="npClose">我没目的，关掉它<small>关闭此标签页（或回到上一个正事页）</small></button>' +
+        '<button class="btn-exit" id="npGraze">限时放风 ▾<small>选一个时长，到点自动再问</small></button>' +
+      '</div>' +
+      '<div class="graze-picker" id="npGrazePicker" hidden>放风时长（点即开始）：' + grazeHtml + '</div>' +
+      '<button class="hold-skip" id="npSkip"><div class="fill" id="npFill"></div><span>长按 2 秒跳过本次（不记录）</span></button>' +
+      '<div class="kbd-hint"><kbd>Ctrl/⌘ + Enter</kbd> 继续 · <kbd>Esc</kbd> 呼出次级选择</div>';
+    document.body.appendChild(panel);
+
+    var ta = panel.querySelector('#npTa');
+    var counter = panel.querySelector('#npCounter');
+    var go = panel.querySelector('#npGo');
+    var chipOn = null;
+
+    // 焦点礼仪：只有当前焦点不在输入框里时才聚焦
+    var ae = document.activeElement;
+    var typing = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable);
+    if (!typing) setTimeout(function () { ta.focus(); }, 150);
+
+    function refresh() {
+      var n = smartLen(ta.value);
+      var ok = n >= 10 || !!chipOn;
+      if (chipOn) {
+        counter.textContent = '已选「' + chipOn + '」✓（可补充说明，非必需）';
+      } else if (n >= 10) {
+        counter.textContent = n + ' / 10 ✓';
+      } else {
+        counter.textContent = n + ' / 10';
+      }
+      counter.className = 'new-counter' + (ok ? ' ok' : '');
+      go.disabled = !ok;
+    }
+    ta.addEventListener('input', refresh);
+    refresh();
+
+    panel.querySelector('#npChips').addEventListener('click', function (e) {
+      var c = e.target.closest('.chip'); if (!c) return;
+      if (chipOn === c.textContent) { c.classList.remove('on'); chipOn = null; }
+      else {
+        panel.querySelectorAll('.chip').forEach(function (x) { x.classList.remove('on'); });
+        c.classList.add('on'); chipOn = c.textContent;
+      }
+      refresh();
+    });
+
+    // 免打扰时长 chips：主按钮文案跟随所选时长
+    panel.querySelector('#npSnoozeChips').addEventListener('click', function (e) {
+      var c = e.target.closest('.sc'); if (!c) return;
+      panel.querySelectorAll('#npSnoozeChips .sc').forEach(function (x) { x.classList.remove('on'); });
+      c.classList.add('on');
+      snoozeVal = parseInt(c.dataset.v, 10);
+      snoozeLabel = c.dataset.l;
+      go.textContent = '继续浏览 · ' + snoozeLabel + '内不再打扰';
+    });
+
+    function close() { panel.remove(); }
+
+    go.addEventListener('click', function () {
+      close();
+      state.active = null;
+      var intent = chipOn ? chipOn : ta.value.trim();
+      toast('已记录「' + (intent.length > 18 ? intent.slice(0, 18) + '…' : intent) + '」· ' + snoozeLabel + '内不再打扰 ✓（用时大约 2 秒）');
+      status('主路径：一次点击完成（免打扰时长可选）。对比一下现行版需要多少秒。');
+    });
+
+    panel.querySelector('#npClose').addEventListener('click', function () {
+      close();
+      bump('saved');
+      showClosedScreen();
+    });
+
+    // 限时放风：点开选时长，点时长即开始
+    var grazePicker = panel.querySelector('#npGrazePicker');
+    panel.querySelector('#npGraze').addEventListener('click', function () {
+      grazePicker.hidden = !grazePicker.hidden;
+      if (!grazePicker.hidden) grazePicker.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+    grazePicker.addEventListener('click', function (e) {
+      var c = e.target.closest('.sc'); if (!c) return;
+      var minutes = parseInt(c.dataset.m, 10);
+      close();
+      bump('graze');
+      startGraze(minutes);
+    });
+
+    // Ctrl/Cmd+Enter 提交；Esc 呼出次级选择
+    document.addEventListener('keydown', keyHandler);
+    function keyHandler(e) {
+      if (!$('newPanel')) { document.removeEventListener('keydown', keyHandler); return; }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && !go.disabled) { go.click(); }
+      if (e.key === 'Escape') {
+        toast('Esc → 次级选择：关掉它 / 放风 5 分钟 / 长按跳过（都在面板下方）');
+        panel.querySelector('.or-line').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+
+    // 长按跳过：摩擦在「跳过」上，不在「回答」上
+    var holdSecs = hot ? 4 : 2;
+    var skipBtn = panel.querySelector('#npSkip');
+    var fill = panel.querySelector('#npFill');
+    var label = skipBtn.querySelector('span');
+    label.textContent = '长按 ' + holdSecs + ' 秒跳过本次（不记录）';
+    var raf = null, start = 0;
+
+    function step(ts) {
+      if (!start) start = ts;
+      var p = Math.min((ts - start) / (holdSecs * 1000), 1);
+      fill.style.width = (p * 100) + '%';
+      label.textContent = p < 1 ? '坚持住，还剩 ' + Math.ceil(holdSecs - (ts - start) / 1000) + ' 秒…' : '已跳过';
+      if (p < 1) { raf = requestAnimationFrame(step); }
+      else {
+        close(); bump('skip'); state.active = null;
+        toast('已跳过本次（未记录）。注意：跳过需要长按，而回答只需要一次点击 —— 摩擦放对了地方。');
+        status('');
+      }
+    }
+    function cancelHold() {
+      if (raf) cancelAnimationFrame(raf);
+      raf = null; start = 0; fill.style.width = '0%';
+      label.textContent = '长按 ' + holdSecs + ' 秒跳过本次（不记录）';
+    }
+    skipBtn.addEventListener('pointerdown', function () { raf = requestAnimationFrame(step); });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (ev) {
+      skipBtn.addEventListener(ev, cancelHold);
+    });
+  }
+
+  // 放风倒计时（演示加速：3 分钟→12s，5 分钟→20s，10 分钟→30s）
+  function startGraze(minutes) {
+    var demoSec = minutes <= 3 ? 12 : (minutes <= 5 ? 20 : 30);
+    var left = demoSec;
+    var badge = document.createElement('div');
+    badge.className = 'graze-badge';
+    badge.id = 'grazeBadge';
+    badge.innerHTML = '🎈 放风中 · ' + minutes + ' 分钟 <span id="gzLeft"></span> <button class="end-early" id="gzEnd">提前结束</button>';
+    document.body.appendChild(badge);
+    document.body.classList.add('grazing');
+    var leftEl = badge.querySelector('#gzLeft');
+
+    function tick() {
+      leftEl.textContent = '（演示加速 ' + demoSec + 's，剩 ' + left + 's）';
+      if (left <= 0) {
+        clearInterval(grazeTimer);
+        badge.remove();
+        document.body.classList.remove('grazing');
+        state.active = 'checkpoint';
+        openCheckpoint(true);
+        return;
+      }
+      left--;
+    }
+    tick();
+    grazeTimer = setInterval(tick, 1000);
+    badge.querySelector('#gzEnd').addEventListener('click', function () {
+      clearInterval(grazeTimer);
+      badge.remove();
+      document.body.classList.remove('grazing');
+      state.active = null;
+      toast('放风提前结束 ✓ 想停，随时能停 —— 控制感本身就是干预。');
+      status('');
+    });
+    status('放风 ' + minutes + ' 分钟：有界刷（bounded grazing）。倒计时结束会自动再问一次。');
+  }
+
+  // 「关掉它」的演示结局
+  function showClosedScreen() {
+    state.active = 'closed';
+    var sc = document.createElement('div');
+    sc.className = 'closed-screen';
+    sc.id = 'closedScreen';
+    sc.innerHTML =
+      '<div class="big">🚪</div>' +
+      '<h3>标签页已关闭</h3>' +
+      '<p>这是本产品最重要的时刻：你承认了自己没有目的，并选择离开。<br>' +
+      '正式版里这里是「回到上一个正事标签页」。这一次觉察会被记为「救回 1 次」，' +
+      '出现在你的今日摘要里 —— 不是作为羞辱，而是作为成果。</p>' +
+      '<div class="acts"><button class="restore" id="csRestore">↩︎ 演示：恢复页面</button></div>';
+    document.body.appendChild(sc);
+    sc.querySelector('#csRestore').addEventListener('click', function () {
+      sc.remove();
+      state.active = null;
+      status('「救回 +1」—— 这就是统计面板里最值得看的一个数字。');
+    });
+  }
+})();
+</script>
+</body>
+</html>

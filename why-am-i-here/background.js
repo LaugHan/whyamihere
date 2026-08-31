@@ -500,6 +500,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === 'CLEAR_ALL_SNOOZE') {
+    // Used by demo mode: clear every snooze + skip cooldown so prompts fire immediately
+    chrome.storage.local.set({ snoozeMap: {}, skipCooldown: {} }, () => {
+      chrome.alarms.getAll((items) => {
+        (items || []).forEach((a) => {
+          if (a.name.startsWith('snooze_') || a.name.startsWith('skipcd_')) {
+            chrome.alarms.clear(a.name);
+          }
+        });
+        sendResponse({ success: true });
+      });
+    });
+    return true;
+  }
+
   if (message.type === 'GET_HISTORY') {
     chrome.storage.local.get('history', (result) => {
       sendResponse({ history: result.history || [] });

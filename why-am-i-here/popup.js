@@ -34,6 +34,11 @@ document.addEventListener('DOMContentLoaded', () => {
     timerSecondsInput.value = 5;
     minCharsInput.value = 10;
     saveSettings('演示模式已开启');
+    // Demo mode must be instantly testable: clear ALL snoozes and skip cooldowns,
+    // otherwise a leftover 1h snooze from a previous submit silently blocks prompts.
+    chrome.runtime.sendMessage({ type: 'CLEAR_ALL_SNOOZE' }, () => {
+      loadSnoozeStatus();
+    });
   });
 
   function addDomain() {

@@ -453,6 +453,48 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === 'GET_DAY_COUNTS') {
+    // Stats for the history page & popup summary: today / week / skip counters
+    chrome.storage.local.get('dayCounts', (result) => {
+      const dayCounts = result.dayCounts || {};
+      const now = new Date();
+      const todayKey = now.toISOString().slice(0, 10);
+      const weekKeys = new Set();
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(now.getTime() - i * 86400000);
+        weekKeys.add(d.toISOString().slice(0, 10));
+      }
+      let todayTotal = 0, todaySkip = 0, weekTotal = 0, weekSkip = 0;
+      for (const [date, day] of Object.entries(dayCounts)) {
+        if (!day) continue;
+        for (const [key, count] of Object.entries(day)) {
+          if (typeof count !== 'number') continue;
+          const isSkip = key.endsWith(':skip');
+          if (isSkip) {
+            if (date === todayKey) todaySkip += count;
+            if (weekKeys.has(date)) weekSkip += count;
+          } else {
+            if (date === todayKey) todayTotal += count;
+            if (weekKeys.has(date)) weekTotal += count;
+          }
+        }
+      }
+      sendResponse({
+        today: { total: todayTotal, skip: todaySkip },
+        week: { total: weekTotal, skip: weekSkip },
+      });
+    });
+    return true;
+  }
+
+  if (message.type === 'CLEAR_HISTORY') {
+    // Clear all written history AND day counters (stats reset together)
+    chrome.storage.local.set({ history: [], dayCounts: {} }, () => {
+      sendResponse({ success: true });
+    });
+    return true;
+  }
+
   if (message.type === 'DELETE_ENTRY') {
     chrome.storage.local.get('history', (result) => {
       const history = (result.history || []).filter(e => e.id !== message.id);

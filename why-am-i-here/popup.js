@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadDomains();
   loadSnoozeStatus();
   loadSettings();
+  loadTodaySummary();
 
   // Add domain
   addBtn.addEventListener('click', addDomain);
@@ -99,6 +100,25 @@ document.addEventListener('DOMContentLoaded', () => {
       if (response && response.status) {
         renderSnoozeStatus(response.status);
       }
+    });
+  }
+
+  function loadTodaySummary() {
+    chrome.runtime.sendMessage({ type: 'GET_DAY_COUNTS' }, (response) => {
+      const el = document.getElementById('todaySummary');
+      if (!el) return;
+      if (!response) {
+        el.innerHTML = '<span class="no-snooze">暂无数据</span>';
+        return;
+      }
+      const t = response.today || { total: 0, skip: 0 };
+      const w = response.week || { total: 0 };
+      el.innerHTML = `
+        <div class="today-summary">
+          <span class="today-num">${t.total}</span> 次被打断 · 跳过 <span class="today-num">${t.skip}</span> 次
+          <div class="today-sub">本周共 ${w.total} 次</div>
+        </div>
+      `;
     });
   }
 

@@ -250,3 +250,58 @@ body {
   margin-top: 10px;
   line-height: 1.6;
 }
+
+/* Stats bar */
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.clear-all-btn {
+  padding: 5px 12px;
+  border: 1.5px solid #ffd6d6;
+  background: #fff5f5;
+  color: #c62828;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.clear-all-btn:hover {
+  border-color: #c62828;
+  background: #c62828;
+  color: #fff;
+}
+
+.stats-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.stat {
+  background: #fff;
+  border-radius: 10px;
+  padding: 12px 8px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.stat b {
+  display: block;
+  font-size: 22px;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+.stat span {
+  display: block;
+  font-size: 11px;
+  color: #999;
+  margin-top: 2px;
+}

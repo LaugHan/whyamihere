@@ -6,6 +6,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const domainFilter = document.getElementById('domainFilter');
   const entryCount = document.getElementById('entryCount');
   const snoozeBanner = document.getElementById('snoozeBanner');
+  const clearAllBtn = document.getElementById('clearAllBtn');
+  const statToday = document.getElementById('statToday');
+  const statWeek = document.getElementById('statWeek');
+  const statTotal = document.getElementById('statTotal');
+  const statSkip = document.getElementById('statSkip');
 
   let allEntries = [];
   let snoozeStatus = {};
@@ -15,6 +20,28 @@ document.addEventListener('DOMContentLoaded', () => {
   domainFilter.addEventListener('change', () => {
     renderHistory();
   });
+
+  clearAllBtn.addEventListener('click', () => {
+    if (!confirm('确定清空全部历史记录和统计吗？此操作不可恢复。')) return;
+    chrome.runtime.sendMessage({ type: 'CLEAR_HISTORY' }, () => {
+      allEntries = [];
+      snoozeStatus = {};
+      populateDomainFilter();
+      renderSnoozeBanner();
+      renderHistory();
+      loadStats();
+    });
+  });
+
+  function loadStats() {
+    chrome.runtime.sendMessage({ type: 'GET_DAY_COUNTS' }, (resp) => {
+      const s = resp || { today: { total: 0, skip: 0 }, week: { total: 0, skip: 0 } };
+      statToday.textContent = s.today.total;
+      statWeek.textContent = s.week.total;
+      statTotal.textContent = allEntries.length;
+      statSkip.textContent = s.today.skip;
+    });
+  }
 
   function loadAll() {
     // Load history and snooze status in parallel
@@ -29,6 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
         populateDomainFilter();
         renderSnoozeBanner();
         renderHistory();
+        loadStats();
       });
     });
   }

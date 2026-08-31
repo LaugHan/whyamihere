@@ -273,3 +273,21 @@ body {
   padding: 10px 20px 14px;
   text-align: center;
 }
+
+/* Today summary */
+.today-summary {
+  font-size: 13px;
+  color: #444;
+  line-height: 1.6;
+}
+
+.today-num {
+  font-weight: 700;
+  color: #e65100;
+  font-size: 15px;
+}
+
+.today-sub {
+  font-size: 12px;
+  color: #999;
+}

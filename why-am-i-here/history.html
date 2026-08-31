@@ -17,7 +17,17 @@
       <select id="domainFilter" class="filter-select">
         <option value="">全部域名</option>
       </select>
-      <span id="entryCount" class="entry-count"></span>
+      <div class="toolbar-actions">
+        <span id="entryCount" class="entry-count"></span>
+        <button id="clearAllBtn" class="clear-all-btn">清空全部</button>
+      </div>
+    </div>
+
+    <div class="stats-bar">
+      <div class="stat"><b id="statToday">0</b><span>今日打断</span></div>
+      <div class="stat"><b id="statWeek">0</b><span>本周打断</span></div>
+      <div class="stat"><b id="statTotal">0</b><span>累计记录</span></div>
+      <div class="stat"><b id="statSkip">0</b><span>今日跳过</span></div>
     </div>
 
     <div id="snoozeBanner" class="snooze-banner"></div>

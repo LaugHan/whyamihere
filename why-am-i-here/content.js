@@ -9,8 +9,12 @@
   const existing = document.getElementById('__whyamIhere_host__');
   if (existing) existing.remove();
 
-  if (window.__whyAmIHereInjected) return;
+  if (window.__whyAmIHereInjected) {
+    console.log('WAIH: content already injected');
+    return;
+  }
   window.__whyAmIHereInjected = true;
+  console.log('WAIH: content script injected on', location.hostname);
 
   // Rotating question copy (HabitLab: vary the intervention to fight habituation)
   const QUESTIONS = [
@@ -484,8 +488,15 @@
   // ====== Message listener ======
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'SHOW_OVERLAY') {
+      console.log('WAIH: SHOW_OVERLAY received', message.domain, 'dayCount', message.dayCount);
       getMinChars().then((minChars) => {
-        createOverlay(message.domain, message.url, minChars, message.dayCount || 1);
+        console.log('WAIH: creating overlay, minChars =', minChars);
+        try {
+          createOverlay(message.domain, message.url, minChars, message.dayCount || 1);
+          console.log('WAIH: overlay created OK');
+        } catch (e) {
+          console.log('WAIH: createOverlay ERROR', e && e.message);
+        }
         sendResponse({ received: true });
       });
       return true;

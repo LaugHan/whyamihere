@@ -76,6 +76,12 @@ async function getRootDomain(hostname) {
   return null;
 }
 
+// ====== Skip cooldown (demo-friendly: after a long-press skip, ask again in 30s) ======
+async function getSkipCooldown(domain) {
+  const { skipCooldown = {} } = await chrome.storage.local.get('skipCooldown');
+  return skipCooldown[domain] || null;
+}
+
 // ====== Snooze helpers ======
 async function isSnoozed(domain) {
   const { snoozeMap = {} } = await chrome.storage.local.get('snoozeMap');
@@ -135,6 +141,14 @@ async function scheduleTabTimer(tabId, url) {
       return;
     }
 
+    const skipUntil = await getSkipCooldown(rootDomain);
+    if (skipUntil && Date.now() < skipUntil) {
+      // User just skipped this domain — hold off until the cooldown expires
+      clearTabTimer(tabId);
+      tabDomains.delete(tabId);
+      return;
+    }
+
     const existingDomain = tabDomains.get(tabId);
     if (existingDomain === rootDomain) {
       // Same domain, timer already scheduled — don't reset
@@ -185,6 +199,9 @@ async function clearTimersForDomain(domain) {
 // ====== Tab event listeners ======
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url) {
+    // A full document load happened: any old overlay instance is gone,
+    // so clear the guard and allow scheduling again.
+    overlayShowing.delete(tabId);
     // scheduleTabTimer internally checks whether this tab is its window's active tab
     await scheduleTabTimer(tabId, tab.url);
   }
@@ -226,7 +243,13 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 async function fireTimer(tabId) {
   try {
     const tab = await chrome.tabs.get(tabId);
-    if (!tab.url || !tab.active) return;
+    if (!tab.url || !tab.active) {
+      // Timer fired while this tab is not the active one (user switched away):
+      // drop the domain marker so switching back schedules a fresh timer.
+      // Otherwise the tab would never be asked again.
+      tabDomains.delete(tabId);
+      return;
+    }
 
     const urlObj = new URL(tab.url);
     const hostname = urlObj.hostname.replace(/^www\./, '');
@@ -269,6 +292,28 @@ async function fireTimer(tabId) {
 
 // ====== Alarm handler ======
 chrome.alarms.onAlarm.addListener(async (alarm) => {
+  // Handle skip-cooldown expiry alarms (pattern: skipcd_<domain>)
+  if (alarm.name.startsWith('skipcd_')) {
+    const domain = alarm.name.replace('skipcd_', '');
+    const { skipCooldown = {} } = await chrome.storage.local.get('skipCooldown');
+    delete skipCooldown[domain];
+    await chrome.storage.local.set({ skipCooldown });
+    // If the user is still on this domain, ask again
+    try {
+      const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+      const tab = tabs && tabs[0];
+      if (tab && tab.url) {
+        const urlObj = new URL(tab.url);
+        const hostname = urlObj.hostname.replace(/^www\./, '');
+        const rootDomain = await getRootDomain(hostname);
+        if (rootDomain === domain) {
+          await scheduleTabTimer(tab.id, tab.url);
+        }
+      }
+    } catch (e) { /* tab gone */ }
+    return;
+  }
+
   // Handle snooze-expiry alarms (pattern: snooze_<domain>)
   if (alarm.name.startsWith('snooze_')) {
     const domain = alarm.name.replace('snooze_', '');
@@ -363,7 +408,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'SKIP_EVENT') {
-    // Long-press skip: NOT written to history, only bumps a local counter
+    // Long-press skip: NOT written to history, only bumps a local counter.
+    // Also sets a 30s cooldown, after which the domain is asked again
+    // (demo-friendly: skipping doesn't permanently silence the prompt).
     const domain = message.domain;
     const today = new Date().toISOString().slice(0, 10);
     chrome.storage.local.get('dayCounts', (result) => {
@@ -372,7 +419,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       day[`${domain}:skip`] = (day[`${domain}:skip`] || 0) + 1;
       dayCounts[today] = day;
       chrome.storage.local.set({ dayCounts }, () => {
-        sendResponse({ success: true });
+        chrome.storage.local.get('skipCooldown', (r) => {
+          const skipCooldown = r.skipCooldown || {};
+          skipCooldown[domain] = Date.now() + 30000; // 30s = chrome.alarms floor
+          chrome.storage.local.set({ skipCooldown }, () => {
+            chrome.alarms.create(`skipcd_${domain}`, { delayInMinutes: 0.5 });
+            sendResponse({ success: true });
+          });
+        });
       });
     });
     return true;
@@ -489,7 +543,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === 'CLEAR_HISTORY') {
     // Clear all written history AND day counters (stats reset together)
-    chrome.storage.local.set({ history: [], dayCounts: {} }, () => {
+    chrome.storage.local.set({ history: [], dayCounts: {}, skipCooldown: {} }, () => {
       sendResponse({ success: true });
     });
     return true;

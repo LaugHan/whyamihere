@@ -13,9 +13,16 @@ const DEFAULT_DOMAINS = [
 const DEFAULT_TIMER_SECONDS = 60;
 const DEFAULT_MIN_CHARS = 50;
 
+// chrome.alarms has a 30s minimum delay in packaged builds; short timers
+// (demo mode, <30s) must use setTimeout instead of alarms.
+const ALARM_FLOOR_SECONDS = 30;
+
 // In-memory tracking: tabId -> domain (lightweight, rebuilt on restart)
 const tabDomains = new Map();
-let activeTabId = null;
+// windowId -> active tabId (per-window tracking; fixes multi-window cross-talk)
+const windowActiveTabs = new Map();
+// tabId -> setTimeout id for short (<30s, e.g. demo mode) timers
+const tabTimeouts = new Map();
 // Tabs that currently have the overlay showing — don't reschedule timers
 const overlayShowing = new Set();
 
@@ -41,7 +48,7 @@ async function initializeActiveTab() {
   try {
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tabs[0]) {
-      activeTabId = tabs[0].id;
+      windowActiveTabs.set(tabs[0].windowId, tabs[0].id);
       await scheduleTabTimer(tabs[0].id, tabs[0].url);
     }
   } catch (e) { /* ignore */ }
@@ -78,16 +85,19 @@ async function setSnooze(domain, untilTimestamp) {
   await chrome.storage.local.set({ snoozeMap });
 }
 
-// ====== Per-tab alarm scheduling ======
+// ====== Per-tab timer scheduling ======
 function alarmName(tabId) {
   return `timer_${tabId}`;
 }
 
 async function scheduleTabTimer(tabId, url) {
-  if (!url || tabId !== activeTabId) return;
-  if (overlayShowing.has(tabId)) return; // Overlay already up, don't reset timer
+  if (!url || overlayShowing.has(tabId)) return; // Overlay already up, don't reset timer
 
   try {
+    // Only the active tab of its window is tracked (prevents background tabs from timing)
+    const tabInfo = await chrome.tabs.get(tabId);
+    if (!tabInfo.active) return;
+
     const urlObj = new URL(url);
     const hostname = urlObj.hostname.replace(/^www\./, '');
     const rootDomain = await getRootDomain(hostname);
@@ -107,26 +117,39 @@ async function scheduleTabTimer(tabId, url) {
 
     const existingDomain = tabDomains.get(tabId);
     if (existingDomain === rootDomain) {
-      // Same domain, alarm already scheduled — don't reset
+      // Same domain, timer already scheduled — don't reset
       return;
     }
 
-    // New domain or first entry — schedule a fresh alarm
+    // New domain or first entry — schedule a fresh timer
     tabDomains.set(tabId, rootDomain);
     const { timerSeconds = DEFAULT_TIMER_SECONDS } = await chrome.storage.sync.get('timerSeconds');
-
-    // Clear any existing alarm for this tab, then create new one
-    await chrome.alarms.clear(alarmName(tabId));
-    chrome.alarms.create(alarmName(tabId), {
-      delayInMinutes: Math.max(timerSeconds / 60, 0.05), // min ~3s for unpacked
-    });
+    clearTabTimer(tabId);
+    scheduleTimer(tabId, timerSeconds);
   } catch (e) {
     clearTabTimer(tabId);
     tabDomains.delete(tabId);
   }
 }
 
+// Short timers (<30s, e.g. demo mode's 5s) use setTimeout because
+// chrome.alarms clamps delays to 30s in packaged builds.
+function scheduleTimer(tabId, timerSeconds) {
+  const delaySeconds = Math.max(Number(timerSeconds) || DEFAULT_TIMER_SECONDS, 1);
+  if (delaySeconds < ALARM_FLOOR_SECONDS) {
+    const timeoutId = setTimeout(() => fireTimer(tabId), delaySeconds * 1000);
+    tabTimeouts.set(tabId, timeoutId);
+  } else {
+    chrome.alarms.create(alarmName(tabId), { delayInMinutes: delaySeconds / 60 });
+  }
+}
+
 function clearTabTimer(tabId) {
+  const timeoutId = tabTimeouts.get(tabId);
+  if (timeoutId !== undefined) {
+    clearTimeout(timeoutId);
+    tabTimeouts.delete(tabId);
+  }
   chrome.alarms.clear(alarmName(tabId)).catch(() => {});
 }
 
@@ -142,24 +165,25 @@ async function clearTimersForDomain(domain) {
 // ====== Tab event listeners ======
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url) {
-    if (tabId === activeTabId) {
-      // Only schedule if overlay isn't showing
-      await scheduleTabTimer(tabId, tab.url);
-    }
+    // scheduleTabTimer internally checks whether this tab is its window's active tab
+    await scheduleTabTimer(tabId, tab.url);
   }
 });
 
 chrome.tabs.onActivated.addListener(async ({ tabId }) => {
-  // Cancel timer for previous active tab
-  if (activeTabId !== null && activeTabId !== tabId) {
-    clearTabTimer(activeTabId);
-    tabDomains.delete(activeTabId);
-    overlayShowing.delete(activeTabId);
-  }
-  activeTabId = tabId;
-
   try {
     const tab = await chrome.tabs.get(tabId);
+    const windowId = tab.windowId;
+
+    // Cancel timer for the previous active tab in this window only
+    const prevTabId = windowActiveTabs.get(windowId);
+    if (prevTabId !== undefined && prevTabId !== tabId) {
+      clearTabTimer(prevTabId);
+      tabDomains.delete(prevTabId);
+      overlayShowing.delete(prevTabId);
+    }
+    windowActiveTabs.set(windowId, tabId);
+
     if (tab.url) {
       await scheduleTabTimer(tabId, tab.url);
     }
@@ -170,39 +194,16 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   clearTabTimer(tabId);
   tabDomains.delete(tabId);
   overlayShowing.delete(tabId);
-  if (activeTabId === tabId) {
-    activeTabId = null;
+  for (const [windowId, id] of windowActiveTabs) {
+    if (id === tabId) {
+      windowActiveTabs.delete(windowId);
+    }
   }
 });
 
-// ====== Alarm handler ======
-chrome.alarms.onAlarm.addListener(async (alarm) => {
-  // Handle snooze-expiry alarms (pattern: snooze_<domain>)
-  if (alarm.name.startsWith('snooze_')) {
-    const domain = alarm.name.replace('snooze_', '');
-    // Check if user is currently on this domain — if so, start a fresh timer
-    if (activeTabId === null || overlayShowing.has(activeTabId)) return;
-    try {
-      const tab = await chrome.tabs.get(activeTabId);
-      if (tab.url) {
-        const urlObj = new URL(tab.url);
-        const hostname = urlObj.hostname.replace(/^www\./, '');
-        const rootDomain = await getRootDomain(hostname);
-        if (rootDomain === domain) {
-          // Still here! Start a fresh 1-minute countdown
-          await scheduleTabTimer(activeTabId, tab.url);
-        }
-      }
-    } catch (e) { /* tab gone */ }
-    return;
-  }
-
-  // Handle per-tab timer alarms (pattern: timer_<tabId>)
-  if (!alarm.name.startsWith('timer_')) return;
-
-  const tabId = parseInt(alarm.name.replace('timer_', ''), 10);
-  if (isNaN(tabId)) return;
-
+// ====== Timer firing ======
+// Shared by chrome.alarms (long timers) and setTimeout (short/demo timers)
+async function fireTimer(tabId) {
   try {
     const tab = await chrome.tabs.get(tabId);
     if (!tab.url || !tab.active) return;
@@ -229,10 +230,8 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     }).catch(async () => {
       // Content script not ready — retry after a short delay
       overlayShowing.delete(tabId);
-      const timerSeconds = (await chrome.storage.sync.get('timerSeconds')).timerSeconds || DEFAULT_TIMER_SECONDS;
-      chrome.alarms.create(alarmName(tabId), {
-        delayInMinutes: Math.max(timerSeconds / 60, 0.05),
-      });
+      const { timerSeconds = DEFAULT_TIMER_SECONDS } = await chrome.storage.sync.get('timerSeconds');
+      scheduleTimer(tabId, timerSeconds);
     });
 
     // Keep tabDomains entry so we don't re-schedule on same-domain navigation
@@ -240,7 +239,40 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   } catch (e) {
     // Tab gone, clean up
     tabDomains.delete(tabId);
+    overlayShowing.delete(tabId);
   }
+}
+
+// ====== Alarm handler ======
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  // Handle snooze-expiry alarms (pattern: snooze_<domain>)
+  if (alarm.name.startsWith('snooze_')) {
+    const domain = alarm.name.replace('snooze_', '');
+    // Check if user is currently on this domain — if so, start a fresh timer
+    try {
+      const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+      const tab = tabs && tabs[0];
+      if (!tab || overlayShowing.has(tab.id)) return;
+      if (tab.url) {
+        const urlObj = new URL(tab.url);
+        const hostname = urlObj.hostname.replace(/^www\./, '');
+        const rootDomain = await getRootDomain(hostname);
+        if (rootDomain === domain) {
+          // Still here! Start a fresh countdown
+          await scheduleTabTimer(tab.id, tab.url);
+        }
+      }
+    } catch (e) { /* tab gone */ }
+    return;
+  }
+
+  // Handle per-tab timer alarms (pattern: timer_<tabId>)
+  if (!alarm.name.startsWith('timer_')) return;
+
+  const tabId = parseInt(alarm.name.replace('timer_', ''), 10);
+  if (isNaN(tabId)) return;
+
+  await fireTimer(tabId);
 });
 
 // ====== Message handling ======
@@ -309,7 +341,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const totalMinutes = hours * 60 + minutes;
       if (totalMinutes > 0) {
         chrome.alarms.create(`snooze_${domain}`, {
-          delayInMinutes: Math.max(totalMinutes, 0.05),
+          delayInMinutes: Math.max(totalMinutes, 0.5),
         });
       }
 

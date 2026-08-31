@@ -224,7 +224,7 @@
             </p>
             <textarea
               id="__why_textarea__"
-              placeholder="例如：我想查找关于机器学习的整理贴，收集资料..."
+              placeholder="例如：我想查一个关于拖延和启动困难的帖子，看看有没有可以做成工具的灵感，顺便看看别人是怎么安排一天的时间的，如果能找到相关研究就更好了"
               maxlength="300"
             ></textarea>
             <div class="char-counter" id="__why_counter__">0 / ${minChars} 字（未达标）</div>
